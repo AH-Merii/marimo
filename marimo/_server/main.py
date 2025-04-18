@@ -52,14 +52,33 @@ def create_starlette_app(
     allow_origins: Optional[tuple[str, ...]] = None,
     lsp_servers: Optional[list[LspServer]] = None,
 ) -> Starlette:
+    # --- BEGIN ADDED LOGGING ---
+    LOGGER.info("create_starlette_app called with enable_auth=%s", enable_auth)
+    LOGGER.info(
+        "create_starlette_app called with allow_origins=%s", allow_origins
+    )
+    # --- END ADDED LOGGING ---
+
     final_middlewares: list[Middleware] = []
 
+    effective_allow_origins = allow_origins  # Store original arg value
     if allow_origins is None:
-        allow_origins = ("localhost", "127.0.0.1") + (
+        effective_allow_origins = ("localhost", "127.0.0.1") + (
             (host,) if host is not None else ()
         )
+        # --- BEGIN ADDED LOGGING ---
+        LOGGER.info(
+            "create_starlette_app: allow_origins was None, using default: %s",
+            effective_allow_origins,
+        )
+        # --- END ADDED LOGGING ---
 
     if enable_auth:
+        # --- BEGIN ADDED LOGGING ---
+        LOGGER.info(
+            "create_starlette_app: Adding CustomSessionMiddleware (enable_auth=True)"
+        )
+        # --- END ADDED LOGGING ---
         final_middlewares.extend(
             [
                 Middleware(
@@ -68,18 +87,37 @@ def create_starlette_app(
                 ),
             ]
         )
+    else:
+        # --- BEGIN ADDED LOGGING ---
+        LOGGER.info(
+            "create_starlette_app: Skipping CustomSessionMiddleware (enable_auth=False)"
+        )
+        # --- END ADDED LOGGING ---
+
+    # --- BEGIN ADDED LOGGING ---
+    LOGGER.info(
+        "create_starlette_app: Initializing AuthBackend with should_authenticate=%s",
+        enable_auth,
+    )
+    LOGGER.info(
+        "create_starlette_app: Adding CORSMiddleware with allow_origins=%s",
+        effective_allow_origins,
+    )
+    # --- END ADDED LOGGING ---
 
     final_middlewares.extend(
         [
             Middleware(OpenTelemetryMiddleware),
             Middleware(
                 CustomAuthenticationMiddleware,
+                # Pass the received enable_auth value here
                 backend=AuthBackend(should_authenticate=enable_auth),
                 on_error=on_auth_error,
             ),
             Middleware(
                 CORSMiddleware,
-                allow_origins=allow_origins,
+                # Pass the calculated allow_origins tuple here
+                allow_origins=effective_allow_origins,
                 allow_credentials=True,
                 allow_methods=["*"],
                 allow_headers=["*"],
@@ -96,6 +134,10 @@ def create_starlette_app(
 
     if middleware:
         final_middlewares.extend(middleware)
+
+    # --- BEGIN ADDED LOGGING ---
+    LOGGER.info("create_starlette_app: Creating Starlette app instance.")
+    # --- END ADDED LOGGING ---
 
     return Starlette(
         routes=build_routes(base_url=base_url),

@@ -295,6 +295,7 @@ dependencies = [
 
 [tool.uv.sources]
 marimo_docs = { path = "./docs", editable = true }
+marimo = { workspace = true }
 
 [tool.hatch.envs.docs.scripts]
 build = "mkdocs build {args}"
@@ -526,3 +527,8 @@ dotenv = [".env"]
 
 [tool.marimo.keymap]
 vimrc = "configs/.vimrc"
+
+[dependency-groups]
+dev = [
+    "marimo",
+]
