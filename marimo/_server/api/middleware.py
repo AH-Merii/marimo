@@ -49,15 +49,28 @@ LOGGER = _loggers.marimo_logger()
 
 
 class AuthBackend(AuthenticationBackend):
-    def __init__(self, should_authenticate: bool = True) -> None:
+    def __init__(self, should_authenticate: bool = False) -> None:
         self.should_authenticate = should_authenticate
 
     async def authenticate(
         self, conn: HTTPConnection
     ) -> Optional[tuple[AuthCredentials, BaseUser]]:
+        LOGGER.info(
+            "AuthBackend: Authenticating connection for %s", conn.url
+        )  # Log URL
+        LOGGER.info(
+            "AuthBackend: Headers received: %s", conn.headers
+        )  # Log all headers
         # We may not need to authenticate. This can be disabled
         # because the user is running in a trusted environment
         # or authentication is handled by a layer above us
+        # Specifically log the cookie header if it exists
+        cookie_header = conn.headers.get("cookie")
+        if cookie_header:
+            # Optionally mask sensitive parts if needed for logs
+            LOGGER.info("AuthBackend: Cookie header value: %s", cookie_header)
+        else:
+            LOGGER.info("AuthBackend: Cookie header MISSING")
         if self.should_authenticate:
             # Valid auth header
             # This validates we have a valid Cookie (already authenticated)
