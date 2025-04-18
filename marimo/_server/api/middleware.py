@@ -5,6 +5,7 @@ import asyncio
 from collections.abc import AsyncIterable
 from dataclasses import dataclass
 from http.client import HTTPResponse, HTTPSConnection
+import logging  # Make sure logging is imported
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -49,37 +50,88 @@ LOGGER = _loggers.marimo_logger()
 
 
 class AuthBackend(AuthenticationBackend):
-    def __init__(self, should_authenticate: bool = False) -> None:
+    # NOTE: Assuming authentication should be ON by default unless
+    # Marimo is started with --no-token (which sets this to False elsewhere)
+    def __init__(self, should_authenticate: bool = True) -> None:
         self.should_authenticate = should_authenticate
 
     async def authenticate(
         self, conn: HTTPConnection
     ) -> Optional[tuple[AuthCredentials, BaseUser]]:
+        # --- BEGIN ADDED/MODIFIED LOGGING ---
+        # Use logger instead of print for consistency
         LOGGER.info(
             "AuthBackend: Authenticating connection for %s", conn.url
         )  # Log URL
         LOGGER.info(
             "AuthBackend: Headers received: %s", conn.headers
         )  # Log all headers
-        # We may not need to authenticate. This can be disabled
-        # because the user is running in a trusted environment
-        # or authentication is handled by a layer above us
         # Specifically log the cookie header if it exists
         cookie_header = conn.headers.get("cookie")
         if cookie_header:
-            # Optionally mask sensitive parts if needed for logs
-            LOGGER.info("AuthBackend: Cookie header value: %s", cookie_header)
+            # Mask sensitive parts of Cookie for logs
+            parts = cookie_header.split(";")
+            # Mask common sensitive cookie names
+            masked_parts = [
+                p.strip().split("=")[0] + "=..."
+                if any(
+                    sensitive in p.lower()
+                    for sensitive in [
+                        "token",
+                        "session",
+                        "_xsrf",
+                        "access",
+                        "secret",
+                    ]
+                )
+                else p.strip()
+                for p in parts
+                if p.strip()  # Ensure not empty after strip
+            ]
+            log_value = "; ".join(masked_parts)
+            LOGGER.info(
+                "AuthBackend: Cookie header value (masked): %s", log_value
+            )
+            # Uncomment below ONLY for local debugging if needed, avoid in shared logs
+            # LOGGER.info("AuthBackend: Cookie header value (RAW): %s", cookie_header)
         else:
             LOGGER.info("AuthBackend: Cookie header MISSING")
+        # --- END ADDED/MODIFIED LOGGING ---
+
+        # We may not need to authenticate. This can be disabled
+        # because the user is running in a trusted environment
+        # or authentication is handled by a layer above us
         if self.should_authenticate:
             # Valid auth header
             # This validates we have a valid Cookie (already authenticated)
             # or validates our auth (and sets the cookie)
+            LOGGER.debug(
+                "AuthBackend: Calling validate_auth..."
+            )  # Added debug log
             valid = validate_auth(conn)
             if not valid:
+                LOGGER.warning(
+                    "AuthBackend: validate_auth returned False. Rejecting."
+                )  # Added log
                 return None
+            else:
+                LOGGER.info(
+                    "AuthBackend: validate_auth returned True."
+                )  # Added log
 
-        mode = AppStateBase(conn.app.state).session_manager.mode
+        # --- If not authenticating OR validation passed, proceed ---
+        # Get mode after potential successful authentication
+        # Use try-except in case state/session_manager isn't fully set up yet
+        try:
+            mode = AppStateBase(conn.app.state).session_manager.mode
+        except Exception:
+            LOGGER.error(
+                "AuthBackend: Could not determine session mode. State: %s",
+                conn.app.state,
+                exc_info=True,
+            )
+            # Deny access if mode cannot be determined (or handle as appropriate)
+            return None
 
         # User's get Read access in Run mode
         if mode == SessionMode.RUN:
@@ -89,6 +141,8 @@ class AuthBackend(AuthenticationBackend):
         if mode == SessionMode.EDIT:
             return AuthCredentials(["read", "edit"]), SimpleUser("user")
 
+        # This part should ideally not be reached if mode is always EDIT or RUN
+        LOGGER.error("AuthBackend: Invalid session mode encountered: %s", mode)
         raise ValueError(f"Invalid session mode: {mode}")
 
 
@@ -433,8 +487,15 @@ class ProxyMiddleware:
             original_params = websocket.query_params
             if original_params:
                 ws_url = f"{ws_url}?{'&'.join(f'{k}={v}' for k, v in original_params.items())}"
-            await websocket.accept()
+            # Custom Headers? Maybe forward some headers from initial handshake?
+            # headers_to_forward = {
+            #    k: v for k, v in websocket.headers.items()
+            #    if k.lower() in ['cookie', 'authorization', 'user-agent']
+            # }
+            # async with connect(ws_url, extra_headers=headers_to_forward) as ws_client:
 
+            # Default connect without explicit header forwarding
+            await websocket.accept()  # Accept client connection first
             async with connect(ws_url) as ws_client:
 
                 async def client_to_upstream() -> None:
@@ -474,6 +535,7 @@ class ProxyMiddleware:
                                 task.cancel()
                         return
                     except Exception:
+                        # Maybe log this error?
                         return
 
                 # Run both relay loops concurrently
@@ -487,16 +549,21 @@ class ProxyMiddleware:
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
+                    # Log gather exception?
                     raise e
                 finally:
                     for task in relay_tasks:
                         if not task.done():
                             task.cancel()
+                    # Ensure websocket is closed if not already disconnected
                     if websocket.client_state != WebSocketState.DISCONNECTED:
                         await websocket.close()
+                    # Ensure upstream client is closed
                     await ws_client.close()
         except Exception as e:
-            LOGGER.error(f"WebSocket proxy error: {e}")
+            LOGGER.error(
+                f"WebSocket proxy error: {e}", exc_info=True
+            )  # Added exc_info
             if websocket.client_state != WebSocketState.DISCONNECTED:
                 await websocket.close(code=1011)  # Internal error
-            raise
+            # Do not re-raise, let middleware handle closing
