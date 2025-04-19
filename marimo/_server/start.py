@@ -139,6 +139,8 @@ def start(
             }
         )
 
+    LOGGER.debug("___Just about to create session")
+
     session_manager = SessionManager(
         file_router=file_router,
         mode=mode,
@@ -155,7 +157,12 @@ def start(
         watch=watch,
     )
 
-    log_level = "info" if development_mode else "error"
+    LOGGER.debug("___Session created!")
+    LOGGER.debug(
+        "Auth token for session =%s created!", session_manager.auth_token
+    )
+
+    log_level = "debug" if development_mode else "error"
 
     (external_port, external_host) = _resolve_proxy(port, host, proxy)
     app = create_starlette_app(

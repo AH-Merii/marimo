@@ -528,6 +528,7 @@ class WebsocketHandler(SessionConsumer):
 
     async def start(self) -> None:
         # Accept the websocket connection
+        LOGGER.debug("___Waiting for websocket to be accepted")
         await self.websocket.accept()
         # Create a new queue for this session
         self.message_queue = asyncio.Queue()

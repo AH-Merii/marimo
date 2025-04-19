@@ -782,6 +782,8 @@ class SessionManager:
         # since this will contain config-level overrides
         self._config_manager = config_manager
 
+        LOGGER.debug("___In session creation")
+
         # Auth token and Skew-protection token
         if auth_token is not None:
             self.auth_token = auth_token
