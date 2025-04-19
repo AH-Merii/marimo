@@ -190,6 +190,7 @@ class KernelManager:
         is_edit_mode = self.mode == SessionMode.EDIT
         listener = None
         if is_edit_mode:
+            LOGGER.debug("___ATTEMPTING to Launch kernel")
             # Need to use a socket for windows compatibility
             listener = connection.Listener(family="AF_INET")
             self.kernel_task = mp.Process(
@@ -448,6 +449,7 @@ class Session:
         configs = app_file_manager.app.cell_manager.config_map()
         use_multiprocessing = mode == SessionMode.EDIT
         queue_manager = QueueManager(use_multiprocessing)
+        LOGGER.debug("___ABOVE kernel manager")
         kernel_manager = KernelManager(
             queue_manager,
             mode,
@@ -457,6 +459,7 @@ class Session:
             virtual_files_supported=virtual_files_supported,
             redirect_console_to_browser=redirect_console_to_browser,
         )
+        LOGGER.debug("___BELOW kernel manager")
 
         return cls(
             initialization_id=initialization_id,

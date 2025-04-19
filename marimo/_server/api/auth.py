@@ -132,20 +132,29 @@ class CookieSession:
     """
 
     def __init__(self, session_state: dict[str, Any]) -> None:
+        LOGGER.debug("___SESSION STATE TYPE =%s", session_state)
         self.session_state = session_state
 
     def get_access_token(self) -> str:
+        LOGGER.debug(
+            "___ACCESS TOKEN =%s", self.session_state.get("access_token", "")
+        )
         access_token: str = self.session_state.get("access_token", "")
         return access_token
 
     def get_username(self) -> str:
+        LOGGER.debug(
+            "___GET_USERNAME =%s", self.session_state.get("username", "")
+        )
         username: str = self.session_state.get("username", "")
         return username
 
     def set_access_token(self, token: str) -> None:
+        LOGGER.debug("___SET_USERNAME =%s", token)
         self.session_state["access_token"] = token
 
     def set_username(self, username: str) -> None:
+        LOGGER.debug("___SET_USERNAME =%s", username)
         self.session_state["username"] = username
 
 
@@ -203,6 +212,7 @@ class CustomSessionMiddleware(SessionMiddleware):
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
+        LOGGER.debug("___SCOPE TYPE =%s", scope["type"])
         if scope["type"] not in ("http", "websocket"):
             await self.app(scope, receive, send)
             return
@@ -212,6 +222,7 @@ class CustomSessionMiddleware(SessionMiddleware):
         # We key the token cookie by port to avoid conflicts
         # with multiple marimo instances running on the same host
         maybe_port = state.maybe_port
+        LOGGER.debug("___SESSION COOKIE =%s", self.original_session_cookie)
         if maybe_port is not None:
             self.session_cookie = (
                 f"{self.original_session_cookie}_{maybe_port}"
