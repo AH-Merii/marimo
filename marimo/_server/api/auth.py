@@ -1,3 +1,4 @@
+# auth.py
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
@@ -34,12 +35,12 @@ TOKEN_QUERY_PARAM = "access_token"
 def validate_auth(
     conn: HTTPConnection, form_dict: Optional[dict[str, str]] = None
 ) -> bool:
-    LOGGER.debug("Validating auth")
+    LOGGER.debug("____Validating auth")
 
     # ===== PATCHED: Bypass auth for WebSocket connections =====
     if conn.scope["type"] == "websocket":
         # Log that we're bypassing auth for WebSockets
-        LOGGER.debug("Bypassing auth check for WebSocket connection")
+        LOGGER.debug("_____Bypassing auth check for WebSocket connection")
         return True
     # ==== End patch ====
 
@@ -212,11 +213,15 @@ class CustomSessionMiddleware(SessionMiddleware):
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
         if scope["type"] not in ("http", "websocket"):
+            LOGGER.debug("_____Not websocket or http")
             await self.app(scope, receive, send)
             return
+
         # Bypass authentication middleware for WebSockets
         if scope["type"] == "websocket":
-            LOGGER.debug("Bypassing auth middleware for WebSocket connection")
+            LOGGER.debug(
+                "_____Bypassing auth middleware for WebSocket connection"
+            )
             # Call the next middleware directly
             await self.app(scope, receive, send)
             return
@@ -258,6 +263,14 @@ class CustomAuthenticationMiddleware(AuthenticationMiddleware):
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
+        if scope["type"] == "websocket":
+            LOGGER.debug(
+                "______Bypassing auth middleware for WebSocket connection"
+            )
+            await self.app(scope, receive, send)
+            return
+
+        # Rest of the original code
         # If a developer has defined a user, store it in scope
         # so that the wrapped app can access it
         developer_defined_user = scope.get("user")

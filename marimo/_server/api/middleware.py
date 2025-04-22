@@ -1,3 +1,4 @@
+# middleware.py
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
 
@@ -90,7 +91,6 @@ class SkewProtectionMiddleware:
     ) -> None:
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
-
         request = Request(scope)
         state = AppState.from_app(request.app)
 
