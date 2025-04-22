@@ -35,6 +35,14 @@ def validate_auth(
     conn: HTTPConnection, form_dict: Optional[dict[str, str]] = None
 ) -> bool:
     LOGGER.debug("Validating auth")
+
+    # ===== PATCHED: Bypass auth for WebSocket connections =====
+    if conn.scope["type"] == "websocket":
+        # Log that we're bypassing auth for WebSockets
+        LOGGER.debug("Bypassing auth check for WebSocket connection")
+        return True
+    # ==== End patch ====
+
     state = AppState.from_app(conn.app)
     auth_token = str(state.session_manager.auth_token)
 
