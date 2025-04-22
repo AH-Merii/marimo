@@ -155,7 +155,7 @@ def start(
         watch=watch,
     )
 
-    log_level = "info" if development_mode else "error"
+    log_level = "debug" if development_mode else "error"
 
     (external_port, external_host) = _resolve_proxy(port, host, proxy)
     app = create_starlette_app(
