@@ -220,7 +220,7 @@ class CustomSessionMiddleware(SessionMiddleware):
         # Bypass authentication middleware for WebSockets
         if scope["type"] == "websocket":
             LOGGER.debug(
-                "_____Bypassing auth middleware for WebSocket connection"
+                "_____Bypassing Session middleware for WebSocket connection"
             )
             # Call the next middleware directly
             await self.app(scope, receive, send)

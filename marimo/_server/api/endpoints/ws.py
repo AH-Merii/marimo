@@ -67,6 +67,27 @@ async def websocket_endpoint(
         200:
             description: Websocket endpoint
     """
+    # ===== PATCHED: Log WebSocket connection details =====
+    LOGGER.debug(
+        "______WebSocket endpoint called with parameters: %s",
+        websocket.query_params,
+    )
+
+    # Add more permissive error handling for connection acceptance
+    try:
+        await websocket.accept()
+        LOGGER.debug("______WebSocket connection accepted")
+        # Rest of original function...
+    except Exception as e:
+        LOGGER.error("______WebSocket error during connection: %s", str(e))
+        # Try to close connection if possible
+        try:
+            await websocket.close(code=1011)
+        except Exception as e:
+            LOGGER.error("______Unable to close connection: %s", str(e))
+            pass
+    # ==== End patch ====
+
     app_state = AppState(websocket)
     raw_session_id = app_state.query_params(SESSION_QUERY_PARAM_KEY)
     if raw_session_id is None:

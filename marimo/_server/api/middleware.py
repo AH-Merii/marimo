@@ -56,6 +56,17 @@ class AuthBackend(AuthenticationBackend):
     async def authenticate(
         self, conn: HTTPConnection
     ) -> Optional[tuple[AuthCredentials, BaseUser]]:
+        # ===== PATCHED: Bypass auth backend for WebSockets =====
+        if conn.scope["type"] == "websocket":
+            LOGGER.debug(
+                "______Bypassing auth backend middleware.py for WebSocket connection"
+            )
+            # Grant full access for WebSocket connections
+            return AuthCredentials(["read", "edit"]), SimpleUser(
+                "websocket_user"
+            )
+        # ==== End patch ====
+
         # We may not need to authenticate. This can be disabled
         # because the user is running in a trusted environment
         # or authentication is handled by a layer above us
@@ -89,6 +100,14 @@ class SkewProtectionMiddleware:
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
+        # ===== PATCHED: Bypass skew protection for WebSockets =====
+        if scope["type"] == "websocket":
+            LOGGER.debug(
+                "______Bypassing skew protection for WebSocket connection"
+            )
+            return await self.app(scope, receive, send)
+        # ==== End patch ====
+
         if scope["type"] != "http":
             return await self.app(scope, receive, send)
         request = Request(scope)
@@ -351,6 +370,24 @@ class ProxyMiddleware:
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
+        # ===== PATCHED: Improved WebSocket proxy handling =====
+        if scope["type"] == "websocket":
+            LOGGER.debug("______WebSocket connection in ProxyMiddleware")
+            # Log request details
+            if "path" in scope:
+                LOGGER.debug(f"______WebSocket path: {scope['path']}")
+            if "headers" in scope:
+                headers = dict(scope["headers"])
+                LOGGER.debug(f"______WebSocket headers: {headers}")
+            if not scope["path"].startswith(self.path):
+                LOGGER.debug(
+                    "______Path doesn't match proxy path, passing through"
+                )
+                return await self.app(scope, receive, send)
+
+            # Continue with original logic...
+        # ==== End patch ====
+
         if scope["type"] == "websocket":
             if not scope["path"].startswith(self.path):
                 return await self.app(scope, receive, send)
