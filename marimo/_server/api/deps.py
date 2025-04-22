@@ -107,14 +107,25 @@ class AppState(AppStateBase):
         super().__init__(request.app.state)
         self.request = request
 
-    def get_current_session_id(self) -> Optional[SessionId]:
+    def get_current_session_id(self) -> SessionId | None:
         """Get the current session."""
-        LOGGER.warning(
-            "______Current request headers: %s",
-            self.request.headers,
-        )
         session_id = self.request.headers.get("Marimo-Session-Id")
-        return SessionId(session_id) if session_id is not None else None
+        LOGGER.debug(
+            "______Current request headers: %s", dict(self.request.headers)
+        )
+
+        if session_id:
+            LOGGER.debug("______Session ID from header: %s", session_id)
+        else:
+            session_id = self.request.cookies.get("marimo_session_id")
+            LOGGER.debug("______Session ID from cookie: %s", session_id)
+
+        if not session_id:
+            LOGGER.warning(
+                "______No session ID found in either headers or cookies."
+            )
+
+        return SessionId(session_id) if session_id else None
 
     def require_current_session_id(self) -> SessionId:
         """Get the current session or raise an error."""
