@@ -1,5 +1,6 @@
 # Copyright 2024 Marimo. All rights reserved.
 from __future__ import annotations
+import json
 
 from typing import TYPE_CHECKING, Any, Optional, Union, cast
 
@@ -108,6 +109,10 @@ class AppState(AppStateBase):
 
     def get_current_session_id(self) -> Optional[SessionId]:
         """Get the current session."""
+        LOGGER.warning(
+            "______Current request headers: %s",
+            self.request.headers,
+        )
         session_id = self.request.headers.get("Marimo-Session-Id")
         return SessionId(session_id) if session_id is not None else None
 
