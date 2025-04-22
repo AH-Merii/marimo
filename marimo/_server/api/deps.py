@@ -115,6 +115,9 @@ class AppState(AppStateBase):
         """Get the current session or raise an error."""
         session_id = self.get_current_session_id()
         if session_id is None:
+            LOGGER.warning(
+                "______Could not find session id in request header-REQUIRED",
+            )
             raise ValueError("Missing Marimo-Session-Id header")
         return session_id
 
@@ -122,6 +125,9 @@ class AppState(AppStateBase):
         """Get the current session."""
         session_id = self.get_current_session_id()
         if session_id is None:
+            LOGGER.debug(
+                "______Could not find session id in request header",
+            )
             return None
         return self.session_manager.get_session(session_id)
 
@@ -130,6 +136,10 @@ class AppState(AppStateBase):
         session_id = self.require_current_session_id()
         session = self.session_manager.get_session(session_id)
         if session is None:
+            LOGGER.warning(
+                "______Could not find session in request header-REQUIRED",
+            )
+
             LOGGER.warning(
                 "Valid sessions: %s",
                 list(self.session_manager.sessions.keys()),

@@ -381,7 +381,18 @@ class ProxyMiddleware:
                 LOGGER.debug(f"______WebSocket headers: {headers}")
             if not scope["path"].startswith(self.path):
                 LOGGER.debug(
-                    "______Path doesn't match proxy path, passing through"
+                    "______Path doesn't match proxy path %s, passing through",
+                    self.path,
+                )
+                LOGGER.debug(
+                    "______target_url %s %s",
+                    type(self.target_url),
+                    self.target_url,
+                )
+
+                LOGGER.debug(
+                    "______path_rewrite %s",
+                    type(self.path_rewrite),
                 )
                 return await self.app(scope, receive, send)
 
