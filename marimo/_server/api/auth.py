@@ -222,8 +222,12 @@ class CustomSessionMiddleware(SessionMiddleware):
         # We key the token cookie by port to avoid conflicts
         # with multiple marimo instances running on the same host
         maybe_port = state.maybe_port
-        LOGGER.debug("___SESSION COOKIE =%s", self.original_session_cookie)
         if maybe_port is not None:
+            LOGGER.debug(
+                "___SESSION COOKIE =%s %s",
+                self.original_session_cookie,
+                maybe_port,
+            )
             self.session_cookie = (
                 f"{self.original_session_cookie}_{maybe_port}"
             )

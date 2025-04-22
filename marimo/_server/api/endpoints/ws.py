@@ -68,8 +68,18 @@ async def websocket_endpoint(
             description: Websocket endpoint
     """
     app_state = AppState(websocket)
+
+    LOGGER.debug(
+        "______WebSocket endpoint called with parameters: %s",
+        app_state.query_params,
+    )
+
     raw_session_id = app_state.query_params(SESSION_QUERY_PARAM_KEY)
     if raw_session_id is None:
+        LOGGER.debug(
+            "______No session id found",
+            app_state.query_params,
+        )
         await websocket.close(
             WebSocketCodes.NORMAL_CLOSE, "MARIMO_NO_SESSION_ID"
         )
@@ -83,6 +93,10 @@ async def websocket_endpoint(
     )
 
     if file_key is None:
+        LOGGER.debug(
+            "______File key not found",
+            app_state.query_params,
+        )
         await websocket.close(
             WebSocketCodes.NORMAL_CLOSE, "MARIMO_NO_FILE_KEY"
         )
