@@ -1,5 +1,5 @@
 /* Copyright 2024 Marimo. All rights reserved. */
-// sessions.ts
+// session.ts
 
 import { init } from "@paralleldrive/cuid2";
 import type { TypedString } from "@/utils/typed";
@@ -22,10 +22,22 @@ export function isSessionId(value: string | null): value is SessionId {
   return /^s_[\da-z]{6}$/.test(value);
 }
 
+// Main session block
 const sessionId = (() => {
   const url = new URL(window.location.href);
   const id = url.searchParams.get(KnownQueryParams.sessionId) as SessionId | null;
 
+  // 🔥 DEBUG visibility hooks
+  console.warn("🔥 session.ts is active!");
+  (window as any).__MARIMO_DEBUG_SESSION = {
+    cookie: document.cookie,
+    userAgent: navigator.userAgent,
+    href: url.toString(),
+    query: Object.fromEntries(url.searchParams.entries()),
+  };
+  document.body.setAttribute("data-session-trace", "loaded");
+
+  // Also use Logger
   Logger.debug("Current cookies:", document.cookie);
   Logger.debug("Navigator info:", navigator.userAgent);
   Logger.debug("Base URI:", document.baseURI);
@@ -35,12 +47,9 @@ const sessionId = (() => {
 
   if (isSessionId(id)) {
     Logger.debug("Valid session_id found in URL:", id);
-
-    // Set cookie for persistence
     document.cookie = `marimo_session_id=${id}; path=/; SameSite=Lax`;
     Logger.debug("Set marimo_session_id cookie from URL param:", id);
 
-    // Remove session_id from URL if not in kiosk mode
     updateQueryParams((params) => {
       if (params.has(KnownQueryParams.kiosk)) {
         Logger.debug("Kiosk mode active — preserving session_id in URL.");
