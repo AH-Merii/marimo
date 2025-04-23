@@ -37,13 +37,6 @@ def validate_auth(
 ) -> bool:
     LOGGER.debug("____Validating auth")
 
-    # ===== PATCHED: Bypass auth for WebSocket connections =====
-    if conn.scope["type"] == "websocket":
-        # Log that we're bypassing auth for WebSockets
-        LOGGER.debug("_____Bypassing auth check for WebSocket connection")
-        return True
-    # ==== End patch ====
-
     state = AppState.from_app(conn.app)
     auth_token = str(state.session_manager.auth_token)
 
@@ -217,15 +210,6 @@ class CustomSessionMiddleware(SessionMiddleware):
             await self.app(scope, receive, send)
             return
 
-        # Bypass authentication middleware for WebSockets
-        if scope["type"] == "websocket":
-            LOGGER.debug(
-                "_____Bypassing Session middleware for WebSocket connection"
-            )
-            # Call the next middleware directly
-            await self.app(scope, receive, send)
-            return
-
         state = AppState.from_app(scope["app"])
 
         # We key the token cookie by port to avoid conflicts
@@ -268,13 +252,6 @@ class CustomAuthenticationMiddleware(AuthenticationMiddleware):
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
-        if scope["type"] == "websocket":
-            LOGGER.debug(
-                "______Bypassing auth middleware for WebSocket connection"
-            )
-            await self.app(scope, receive, send)
-            return
-
         # Rest of the original code
         # If a developer has defined a user, store it in scope
         # so that the wrapped app can access it
