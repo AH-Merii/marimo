@@ -83,8 +83,11 @@ async def websocket_endpoint(
     raw_session_id = app_state.query_params(SESSION_QUERY_PARAM_KEY)
     if raw_session_id is None:
         LOGGER.debug(
-            "______No session id found",
+            "______No session id found, attempting to fetch session id"
         )
+        raw_session_id = app_state.get_current_session_id()
+    if raw_session_id is None:
+        LOGGER.debug("______Still could not fetch session id")
         await websocket.close(
             WebSocketCodes.NORMAL_CLOSE, "MARIMO_NO_SESSION_ID"
         )

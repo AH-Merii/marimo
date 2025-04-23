@@ -271,6 +271,7 @@ async def shutdown(
         return SuccessResponse()
 
     # Otherwise, get the session
+    LOGGER.debug("______Attempting to get current session id")
     session_id = app_state.get_current_session_id()
     if not session_id:
         shutdown_server()
