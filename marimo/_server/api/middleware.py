@@ -59,13 +59,19 @@ class AuthBackend(AuthenticationBackend):
         # We may not need to authenticate. This can be disabled
         # because the user is running in a trusted environment
         # or authentication is handled by a layer above us
+        LOGGER.debug(
+            "______Should authenticate set to: %s", self.should_authenticate
+        )
         if self.should_authenticate:
+            LOGGER.debug("______Authenticating")
             # Valid auth header
             # This validates we have a valid Cookie (already authenticated)
             # or validates our auth (and sets the cookie)
             valid = validate_auth(conn)
             if not valid:
+                LOGGER.debug("______Unable to Authenticate")
                 return None
+            LOGGER.debug("______Authenticated")
 
         mode = AppStateBase(conn.app.state).session_manager.mode
 
@@ -234,6 +240,17 @@ class _AsyncHTTPClient:
         headers = dict(headers)
         headers["host"] = self.host
 
+        LOGGER.debug(
+            "______Building Request:\nbase_url: %s\nhost: %s\nurl: %s\nurl-query: %s\nfull_url: %s\nmethod: %s\n headers: %s",
+            self.base_url,
+            self.host,
+            url.path,
+            url.query,
+            full_url,
+            method,
+            headers,
+        )
+
         request = _URLRequest(
             full_url,  # Use the full URL here
             method=method,
@@ -351,35 +368,6 @@ class ProxyMiddleware:
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
-        # ===== PATCHED: Improved WebSocket proxy handling =====
-        if scope["type"] == "websocket":
-            LOGGER.debug("______WebSocket connection in ProxyMiddleware")
-            # Log request details
-            if "path" in scope:
-                LOGGER.debug(f"______WebSocket path: {scope['path']}")
-            if "headers" in scope:
-                headers = dict(scope["headers"])
-                LOGGER.debug(f"______WebSocket headers: {headers}")
-            if not scope["path"].startswith(self.path):
-                LOGGER.debug(
-                    "______Path doesn't match proxy path %s, passing through",
-                    self.path,
-                )
-                LOGGER.debug(
-                    "______target_url %s %s",
-                    type(self.target_url),
-                    self.target_url,
-                )
-
-                LOGGER.debug(
-                    "______path_rewrite %s",
-                    type(self.path_rewrite),
-                )
-                return await self.app(scope, receive, send)
-
-            # Continue with original logic...
-        # ==== End patch ====
-
         if scope["type"] == "websocket":
             if not scope["path"].startswith(self.path):
                 return await self.app(scope, receive, send)
@@ -446,9 +434,11 @@ class ProxyMiddleware:
     ) -> None:
         websocket = WebSocket(scope, receive=receive, send=send)
         try:
+            LOGGER.debug("______Websocket SCOPE: %s", websocket.scope)
             original_params = websocket.query_params
             if original_params:
                 ws_url = f"{ws_url}?{'&'.join(f'{k}={v}' for k, v in original_params.items())}"
+                LOGGER.debug("______ws url: %s", ws_url)
             await websocket.accept()
 
             async with connect(ws_url) as ws_client:

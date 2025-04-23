@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import logging
-import logging.handlers
 import sys
+import inspect
 from typing import Any, cast
 
 try:
@@ -17,38 +17,22 @@ def _stderr_supports_color() -> bool:
     try:
         if hasattr(sys.stderr, "isatty") and sys.stderr.isatty():
             if curses:
-                curses.setupterm()  # type: ignore[attr-defined,unused-ignore] # noqa: E501
-                if curses.tigetnum("colors") > 0:  # type: ignore[attr-defined,unused-ignore] # noqa: E501
+                curses.setupterm()
+                if curses.tigetnum("colors") > 0:
                     return True
     except Exception:
-        # Very broad exception handling because it's always better to
-        # fall back to non-colored logs than to break at startup.
         pass
     return False
 
 
 class LogFormatter(logging.Formatter):
-    """Log formatter used in Tornado.
-
-    Key features of this formatter are:
-
-    * Color support when logging to a terminal that supports it.
-    * Timestamps on every log line.
-    * Robust against str/bytes encoding problems.
-
-    Color support on Windows versions that do not support ANSI color codes is
-    enabled by use of the colorama__ library. Applications that wish to use
-    this must first initialize colorama with a call to ``colorama.init``.
-    See the colorama documentation for details.
-
-    __ https://pypi.python.org/pypi/colorama
-
-    .. versionchanged:: 4.5
-       Added support for ``colorama``. Changed the constructor
-       signature to be compatible with `logging.config.dictConfig`.
-    """
-
-    DEFAULT_FORMAT = "%(color)s[%(levelname)1.1s %(asctime)s %(module)s:%(lineno)d]%(end_color)s %(message)s"  # noqa: E501
+    DEFAULT_FORMAT = (
+        "%(color)s[%(levelname)1.1s %(asctime)s]"
+        "%(filename_color)s %(filename)s:%(lineno)d%(reset_color)s "
+        "%(class_color)s%(classname)s%(reset_color)s"
+        "%(function_color)s%(funcName)s()%(reset_color)s - "
+        "%(end_color)s%(message)s"
+    )
     DEFAULT_DATE_FORMAT = "%y%m%d %H:%M:%S"
     DEFAULT_COLORS = {
         logging.DEBUG: 4,  # Blue
@@ -66,80 +50,73 @@ class LogFormatter(logging.Formatter):
         color: bool = True,
         colors: dict[int, int] = DEFAULT_COLORS,
     ) -> None:
-        r"""
-        :arg bool color: Enables color support.
-        :arg str fmt: Log message format.
-          It will be applied to the attributes dict of log records. The
-          text between ``%(color)s`` and ``%(end_color)s`` will be colored
-          depending on the level if color support is on.
-        :arg dict colors: color mappings from logging level to terminal color
-          code
-        :arg str datefmt: Datetime format.
-          Used for formatting ``(asctime)`` placeholder in ``prefix_fmt``.
-
-        .. versionchanged:: 3.2
-
-           Added ``fmt`` and ``datefmt`` arguments.
-        """
-        del style
-        logging.Formatter.__init__(self, datefmt=datefmt)
+        super().__init__(datefmt=datefmt)
         self._fmt = fmt
-
         self._colors: dict[int, str] = {}
+        self._filename_color = "\033[36m"  # Cyan
+        self._function_color = "\033[34m"  # Blue
+        self._class_color = "\033[35m"  # Magenta
+        self._normal = "\033[0m"
+
         if color and _stderr_supports_color():
-            if curses is not None:
+            if curses:
+                curses.setupterm()
                 fg_color = (
-                    curses.tigetstr("setaf") or curses.tigetstr("setf") or b""  # type: ignore[attr-defined,unused-ignore] # noqa: E501
+                    curses.tigetstr("setaf") or curses.tigetstr("setf") or b""
                 )
-
                 for levelno, code in colors.items():
-                    # Convert the terminal control characters from
-                    # bytes to unicode strings for easier use with the
-                    # logging module.
                     self._colors[levelno] = str(
-                        curses.tparm(fg_color, code),
-                        "ascii",  # type: ignore[attr-defined,unused-ignore] # noqa: E501
+                        curses.tparm(fg_color, code), "ascii"
                     )
-                normal = curses.tigetstr("sgr0")  # type: ignore[attr-defined,unused-ignore] # noqa: E501
-                if normal is not None:
-                    self._normal = str(normal, "ascii")
-                else:
-                    self._normal = ""
-            else:
-                # If curses is not present (currently we'll only get here for
-                # colorama on windows), assume hard-coded ANSI color codes.
-                for levelno, code in colors.items():
-                    self._colors[levelno] = "\033[2;3%dm" % code  # noqa: UP031
-                self._normal = "\033[0m"
+                self._normal = str(curses.tigetstr("sgr0") or b"", "ascii")
         else:
-            self._normal = ""
+            for levelno, code in colors.items():
+                self._colors[levelno] = f"\033[2;3{code}m"
 
-    def format(self, record: Any) -> str | Any:
+    def format(self, record: Any) -> str:
         try:
-            message = record.getMessage()
-            assert isinstance(message, str)  # guaranteed by logging
-            record.message = message
+            record.message = record.getMessage()
         except Exception as e:
             record.message = f"Bad message ({e!r}): {record.__dict__!r}"
 
-        record.asctime = self.formatTime(record, cast(str, self.datefmt))
+        record.asctime = self.formatTime(record, self.datefmt)
+        record.color = self._colors.get(record.levelno, "")
+        record.end_color = self._normal
 
-        if record.levelno in self._colors:
-            record.color = self._colors[record.levelno]
-            record.end_color = self._normal
-        else:
-            record.color = record.end_color = ""
+        record.filename_color = self._filename_color
+        record.function_color = self._function_color
+        record.class_color = self._class_color
+        record.reset_color = self._normal
+
+        record.classname = self._get_class_name_from_stack(record)
 
         formatted = self._fmt % record.__dict__
 
-        if record.exc_info:
-            if not record.exc_text:
-                record.exc_text = self.formatException(record.exc_info)
+        if record.exc_info and not record.exc_text:
+            record.exc_text = self.formatException(record.exc_info)
         if record.exc_text:
-            # exc_text contains multiple lines.  We need to _safe_unicode
-            # each line separately so that non-utf8 bytes don't cause
-            # all the newlines to turn into '\n'.
             lines = [formatted.rstrip()]
             lines.extend(str(ln) for ln in record.exc_text.split("\n"))
             formatted = "\n".join(lines)
         return formatted.replace("\n", "\n    ")
+
+    def _get_class_name_from_stack(self, record: Any) -> str:
+        """
+        Inspect the call stack to find the class name if possible.
+        """
+        frame = inspect.currentframe()
+        if not frame:
+            return ""
+
+        try:
+            # Walk back through the frames until we find one matching the logger call
+            while frame:
+                code = frame.f_code
+                if code.co_name == record.funcName:
+                    local_self = frame.f_locals.get("self", None)
+                    if local_self:
+                        return f"{local_self.__class__.__name__} "
+                frame = frame.f_back
+        except Exception:
+            pass
+        return ""
